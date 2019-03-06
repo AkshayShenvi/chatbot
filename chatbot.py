@@ -79,3 +79,35 @@ for answer in clean_answers:
         else:
             wordtocount[word]+=1
     
+# Creating dictionaries that map the question words and answer words
+threshold = 20
+questionswordstoint = {}
+word_number=0
+for word, count in wordtocount.items():
+    if count >= threshold:
+        questionswordstoint[word]=word_number
+        word_number+=1
+answerswordstoint ={}
+word_number=0
+for word, count in wordtocount.items():
+    if count >= threshold:
+        answerswordstoint[word]=word_number
+        word_number+=1
+        
+#Adding tokens to dictionaries
+tokens=['<PAD>','<EOS>','<OUT>','<SOS>']
+for token in tokens:
+    questionswordstoint[token] = len(questionswordstoint)+1
+for token in tokens:
+    answerswordstoint[token]= len(answerswordstoint)+1  
+    
+    
+# creating inverse dictionary for words to answers
+answersinttowords={w_i:w for w,w_i in answerswordstoint.items()}
+
+# Addind EOS to clean_answers
+for i in range(len(clean_answers)):
+    clean_answers[i]+=' <EOS>'
+    
+    
+        
