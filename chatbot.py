@@ -108,6 +108,35 @@ answersinttowords={w_i:w for w,w_i in answerswordstoint.items()}
 # Addind EOS to clean_answers
 for i in range(len(clean_answers)):
     clean_answers[i]+=' <EOS>'
+
+# Give all quest and ans into integers
+# replace the words that were filtered by <OUT>
+questions_to_int= []
+for question in clean_questions:
+    ints=[]
+    for word in question.split():
+        if word not in questionswordstoint:
+            ints.append(questionswordstoint['<OUT>'])
+        else:
+            ints.append(questionswordstoint[word])
+    questions_to_int.append(ints)
+answers_to_int= []
+for answer in clean_answers:
+    ints=[]
+    for word in answer.split():
+        if word not in answerswordstoint:
+            ints.append(answerswordstoint['<OUT>'])
+        else:
+            ints.append(answerswordstoint[word])
+    answers_to_int.append(ints)
     
+#Sorting questions and answers by length
+sort_clean_questions=[]
+sort_clean_answers=[]
+for length in range(1,25+1):
+    for i in enumerate(questions_to_int):
+        if len(i[1])==length:
+            sort_clean_questions.append(questions_to_int[i[0]])
+            sort_clean_answers.append(answers_to_int[i[0]])
     
         
