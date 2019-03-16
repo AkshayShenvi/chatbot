@@ -322,3 +322,28 @@ with tf.name_scope("optimization"):
     gradients = optimizer.compute_gradients(loss_error)
     clipped_gradients = [(tf.clip_by_value(grad_tensor,-5.0,5.0), grad_variable) for grad_tensor, grad_variable in gradients if grad_tensor is not None] 
     optimizer_gradient_clipping = optimizer.apply_gradients(clipped_gradients)
+
+#padding the sequences with the <PAD> token    
+def apply_padding(batch_of_sequences,wordtoint):
+    max_sequence_length = max([len(sequence) for sequence in batch_of_sequences])
+    return [sequence + [wordtoint['<PAD>']] * (max_sequence_length - len(sequence)) for sequence in batch_of_sequences]
+
+# splitting the data into batches of questions and answers
+def split_into_batches(questions, answers, batch_size):
+    for batch_index in range(0,len(questions)// batch_size):
+        start_index = batch_index * batch_size
+        questions_in_batch = questions[start_index: start_index + batch_size]
+        answers_in_batch = answers[start_index: start_index + batch_size]
+        paded_questions_in_batch = np.array(apply_padding(questions_in_batch,questionswordstoint))
+        paded_answers_in_batch = np.array(apply_padding(answers_in_batch, answerswordstoint))
+        yield paded_questions_in_batch , paded_answers_in_batch
+
+# Splitting questions and answers into training and validation sets
+training_validation_split= int(len(sort_clean_questions) * 0.15)
+training_questions = sort_clean_questions[training_validation_split:]
+training_answers = sort_clean_answers[training_validation_split:]
+validation_questions = sort_clean_questions[:training_validation_split]
+validation_answers = sort_clean_answers[:training_validation_split]
+
+
+#Training
