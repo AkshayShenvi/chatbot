@@ -189,7 +189,7 @@ def decode_training_set(encoder_state,decoder_cell,decoder_embeded_input,sequenc
     return output_function(decoder_output_dropout)
 
 # Decoding the test set
-def decode_test_set(encoder_state,decoder_cell,decoder_embeded_matrix,sos_id,eos_id, maximum_length,num_words,sequence_length, decoding_scope,output_function,keep_prob,batch_size):
+def decode_test_set(encoder_state,decoder_cell,decoder_embiddings_matrix,sos_id,eos_id, maximum_length,num_words,sequence_length, decoding_scope,output_function,keep_prob,batch_size):
     attention_states = tf.zeros([batch_size,1,decoder_cell.output_size])
     attention_keys, attention_values,attention_score_function,attention_construct_function= tf.contrib.seq2seq.prepare_attention(attention_states, attention_option = 'bahdanau',num_units = decoder_cell.output_size)
     test_decoder_function = tf.contrib.seq2seq.attention_decoder_fn_inference(output_function,
@@ -198,7 +198,7 @@ def decode_test_set(encoder_state,decoder_cell,decoder_embeded_matrix,sos_id,eos
                                                                               attention_values,
                                                                               attention_score_function,
                                                                               attention_construct_function,
-                                                                              decoder_embeded_matrix,
+                                                                              decoder_embiddings_matrix,
                                                                               sos_id,
                                                                               eos_id,
                                                                               maximum_length,
@@ -253,9 +253,9 @@ def seq2seq_model(inputs, targets, keep_prob, batch_size, sequence_length, answe
                                                               encoder_embidding_size,
                                                               initializer= tf.random_uniform_initializer(0,1))
     encoder_state = encoder_rnn(encoder_embedded_input, rnn_size, num_layers, keep_prob, sequence_length)
-    preprocess_targets = preprocess_targets(targets, questionswordstoint, batch_size)
-    decoder_embiddings_matrix = tf.Variable(tf.random_uniform([questions_num_words + 1, decoder_embedding_size], 0, 1))
-    decoder_embedded_input = tf.nn.embedding_lookup(decoder_embiddings_matrix, preprocess_targets)
+    preprocessed_targets = preprocess_targets(targets, questionswordstoint, batch_size)
+    decoder_embiddings_matrix = tf.Variable(tf.random_uniform([questions_num_words + 1, decoder_embidding_size], 0, 1))
+    decoder_embedded_input = tf.nn.embedding_lookup(decoder_embiddings_matrix, preprocessed_targets)
     training_predictions, test_predictions = decoder_rnn(decoder_embedded_input,
                                                          decoder_embiddings_matrix,
                                                          encoder_state,
@@ -334,9 +334,9 @@ def split_into_batches(questions, answers, batch_size):
         start_index = batch_index * batch_size
         questions_in_batch = questions[start_index: start_index + batch_size]
         answers_in_batch = answers[start_index: start_index + batch_size]
-        paded_questions_in_batch = np.array(apply_padding(questions_in_batch,questionswordstoint))
-        paded_answers_in_batch = np.array(apply_padding(answers_in_batch, answerswordstoint))
-        yield paded_questions_in_batch , paded_answers_in_batch
+        padded_questions_in_batch = np.array(apply_padding(questions_in_batch,questionswordstoint))
+        padded_answers_in_batch = np.array(apply_padding(answers_in_batch, answerswordstoint))
+        yield padded_questions_in_batch , padded_answers_in_batch
 
 # Splitting questions and answers into training and validation sets
 training_validation_split= int(len(sort_clean_questions) * 0.15)
@@ -347,3 +347,61 @@ validation_answers = sort_clean_answers[:training_validation_split]
 
 
 #Training
+batch_index_check_training_loss = 100
+batch_index_check_validation_loss = ((len(training_questions)) // batch_size // 2) -1
+total_training_loss_error = 0 
+list_validation_loss_error = []
+early_stopping_check = 0
+early_stopping_stop = 1000
+checkpoint = "chatbot_weignts.ckpt"
+session.run(tf.global_variables_initializer())
+for epoch in range(1,epochs + 1):
+    for batch_index, (padded_questions_in_batch, padded_answers_in_batch) in enumerate(split_into_batches(training_questions,training_answers,batch_size)):
+        starting_time = time.time()
+        _, batch_training_loss_error = session.run([optimizer_gradient_clipping, loss_error],{inputs: padded_questions_in_batch,
+                                                   targets:padded_answers_in_batch,
+                                                   lr: learnung_rate,
+                                                   sequence_length: padded_answers_in_batch.shape[1],
+                                                   keep_prob: keep_probability})
+        total_training_loss_error += batch_training_loss_error
+        ending_time =time.time()
+        batch_time = ending_time -starting_time
+        if batch_index % batch_index_check_training_loss == 0:
+            print('Epoch: {:>3}/{}, Batch: {:>4}/{}, Training Loss Error: {:>6.3f}, Training Time on 100 Batches:{:d} seconds'.format(epoch,epochs,batch_index,len(training_questions)// batch_size,total_training_loss_error/batch_index_check_training_loss,int(batch_time * batch_index_check_training_loss)))
+            total_training_loss_error = 0
+        if batch_index % batch_index_check_validation_loss == 0  and batch_index > 0:
+            total_validation_loss_error =0
+            starting_time = time.time()
+            for batch_index_validation, (padded_questions_in_batch, padded_answers_in_batch) in enumerate(split_into_batches(validation_questions,validation_answers,batch_size)):
+                 
+                batch_validation_loss_error = session.run(loss_error,{inputs: padded_questions_in_batch,
+                                                                       targets:padded_answers_in_batch,
+                                                                       lr: learnung_rate,
+                                                                       sequence_length: padded_answers_in_batch.shape[1],
+                                                                       keep_prob: 1})
+                total_validation_loss_error += batch_validation_loss_error
+            ending_time =time.time()
+            batch_time = ending_time -starting_time
+            average_validation_loss_error = total_validation_loss_error / (len(validation_questions)/ batch_size)
+            print('Validation Loss Error: {:>6.3f}, Batch Validation Time: {:d} seconds'.format(average_validation_loss_error, int(batch_time)))
+            learnung_rate *= learning_rate_decay
+            if learning_rate < min_learning_rate:
+                learnung_rate = min_learning_rate
+            list_validation_loss_error.append(average_validation_loss_error)
+            if average_validation_loss_error <= min(list_validation_loss_error):
+                print('I speak better now')
+                early_stopping_check = 0 
+                saver = tf.train.Saver()
+                saver.save(session,checkpoint)
+            else:
+                print('Sorry I do not feel better, I will practice more')
+                early_stopping_check += 1
+                if early_stopping_check == early_stopping_stop:
+                    break
+    if early_stopping_check == early_stopping_stop:
+        print('I cannot speak better.')
+        break
+print("Game Over")
+             
+    
+    
